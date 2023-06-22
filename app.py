@@ -1,5 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+import requests
 import imageio
+import base64
 import os
 
 app = FastAPI()
@@ -56,6 +58,46 @@ async def join_frames(frames: list[UploadFile] = File(...)):
     writer.close()
     
     return {"message": "Frames joined successfully"}
+
+
+@app.post("/process_image")
+async def process_image(input_image: bytes = File(...)):
+    # Parâmetros da solicitação para a API rembg
+    # Convertendo a imagem para base64
+    input_image_base64 = base64.b64encode(input_image).decode("utf-8")
+    
+    url = "http://127.0.0.1:7860/rembg"
+    data = {
+        "input_image": input_image_base64,
+        "model": "u2net",
+        "return_mask": False,
+        "alpha_matting": False,
+        "alpha_matting_foreground_threshold": 240,
+        "alpha_matting_background_threshold": 10,
+        "alpha_matting_erode_size": 10
+    }
+    
+    # Enviar a solicitação para a API rembg
+    response = requests.post(url, json=data)
+    
+    # Verificar a resposta
+    if response.status_code == 200:
+        # Criar o diretório para armazenar as imagens processadas
+        os.makedirs('processadas', exist_ok=True)
+        
+          
+        # Decodificar a imagem processada de base64 para bytes
+        processed_image_bytes = base64.b64decode(response.json()["image"])
+        
+        # Salvar a imagem processada em um arquivo PNG
+        processed_image_path = 'processadas/image.png'
+        with open(processed_image_path, 'wb') as f:
+            f.write(processed_image_bytes)
+        
+        return {"processed_image_path": processed_image_path}
+    else:
+        raise HTTPException(status_code=response.status_code, detail="Error processing the image")
+
 
 if __name__ == '__main__':
     import uvicorn
