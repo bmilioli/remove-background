@@ -34,30 +34,6 @@ async def extract_frames(video: UploadFile = File(...)):
     
     return {"message": "Frames extracted successfully"}
 
-@app.post("/join_frames")
-async def join_frames(frames: list[UploadFile] = File(...)):
-    # Verificar se foram fornecidos arquivos de imagem
-    for frame in frames:
-        if not frame.filename.endswith(('.png', '.jpg', '.jpeg')):
-            raise HTTPException(status_code=400, detail="Invalid image format")
-    
-    # Criar um diretório para armazenar o vídeo
-    os.makedirs('videos', exist_ok=True)
-    
-    # Salvar os arquivos de imagem
-    for frame in frames:
-        frame_path = os.path.join('videos', frame.filename)
-        with open(frame_path, 'wb') as f:
-            f.write(frame.file.read())
-    
-    # Criar um vídeo com os arquivos de imagem
-    writer = imageio.get_writer('video.mp4', fps=24)
-    for frame in frames:
-        frame_path = os.path.join('videos', frame.filename)
-        writer.append_data(imageio.imread(frame_path))
-    writer.close()
-    
-    return {"message": "Frames joined successfully"}
 
 
 @app.post("/process_image")
@@ -97,6 +73,32 @@ async def process_image(input_image: bytes = File(...)):
         return {"processed_image_path": processed_image_path}
     else:
         raise HTTPException(status_code=response.status_code, detail="Error processing the image")
+    
+
+@app.post("/join_frames")
+async def join_frames(frames: list[UploadFile] = File(...)):
+    # Verificar se foram fornecidos arquivos de imagem
+    for frame in frames:
+        if not frame.filename.endswith(('.png', '.jpg', '.jpeg')):
+            raise HTTPException(status_code=400, detail="Invalid image format")
+    
+    # Criar um diretório para armazenar o vídeo
+    os.makedirs('videos', exist_ok=True)
+    
+    # Salvar os arquivos de imagem
+    for frame in frames:
+        frame_path = os.path.join('videos', frame.filename)
+        with open(frame_path, 'wb') as f:
+            f.write(frame.file.read())
+    
+    # Criar um vídeo com os arquivos de imagem
+    writer = imageio.get_writer('video.mp4', fps=24)
+    for frame in frames:
+        frame_path = os.path.join('videos', frame.filename)
+        writer.append_data(imageio.imread(frame_path))
+    writer.close()
+    
+    return {"message": "Frames joined successfully"}
 
 
 if __name__ == '__main__':
