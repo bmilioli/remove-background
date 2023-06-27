@@ -13,7 +13,7 @@ from config import settings
 class RemoveVideobackground:
 
     def process_remove_video_background(self, video_file: UploadFile) -> FileResponse:
-        self._extract_frames_from_video(video_file)
+        fps_video = self._extract_frames_from_video(video_file)
         self._remove_background_from_video()
         
         return {"message": "Background removed successfully"}
@@ -30,9 +30,12 @@ class RemoveVideobackground:
         video_path = os.path.join('frames', video.filename)
         with open(video_path, 'wb') as f:
             f.write(video.file.read())
-    
+                   
         # Extrair os frames do vídeo
         reader = imageio.get_reader(video_path, 'ffmpeg')
+        #Obter o fps do vídeo
+        fps = reader.get_meta_data()['fps']
+
         frames = []
         for frame in reader:
             frames.append(frame)
@@ -43,7 +46,7 @@ class RemoveVideobackground:
             frame_path = os.path.join('frames', f'frame_{i}.png')
             imageio.imwrite(frame_path, frame)
     
-        return {"message": "Frames extracted successfully"}     
+        return fps     
 
     def _remove_background_from_video(model: str = 'u2net') -> List[str]:
         input_folder = "temp/frames"
