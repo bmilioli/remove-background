@@ -110,8 +110,8 @@ class RemoveVideobackground:
                     processed_image_bytes = base64.b64decode(
                         response.json()["image"])
 
-                    # Salvar a imagem processada em um arquivo png
-                    processed_image_path = f'{output_folder}/image{frameNumber}.png'
+                    # Salvar a imagem processada em um arquivo png com o mesmo nome
+                    processed_image_path = f'{output_folder}/frame_{frameNumber:04d}.png'
                     with open(processed_image_path, 'wb') as f:
                         f.write(processed_image_bytes)
 
@@ -124,29 +124,26 @@ class RemoveVideobackground:
 
         return processed_images
 
+        # criar fundo preto no png e salvar em um novo diretorio
+
     def _create_video_from_frames(self, fps: int) -> FileResponse:
 
         # Criar um diretório para armazenar o vídeo
         os.makedirs('temp/video', exist_ok=True)
-
-        # Abrir o diretório de frames original
-        frames_path_original = os.path.join('temp/frames', '*.png')
-        frame_files_original = sorted(glob.glob(frames_path_original))
 
         # Abrir o diretório de frames
         frames_path = os.path.join('temp/processed', '*.png')
         frame_files = sorted(glob.glob(frames_path))
 
         # Obter a largura e altura do primeiro frame
-        first_frame_original = Image.open(frame_files_original[0])
-        width, height = first_frame_original.size
+        first_frame = Image.open(frame_files[0])
+        width, height = first_frame.size
 
         # Determinar a proporção original do vídeo
         aspect_ratio = width / height
 
-        # Determinar a nova largura com base na altura fixa (por exemplo, 480 pixels)
-        new_height = 480
-        new_width = int(new_height * aspect_ratio)
+        # Determinar a nova largura com base na altura desejada
+        new_width = int(height * aspect_ratio)
 
         # Criar um arquivo de vídeo
         video_path = os.path.join('temp/video', 'video.mp4')
@@ -155,8 +152,7 @@ class RemoveVideobackground:
         # Adicionar os frames ao vídeo com redimensionamento
         for frame_file in frame_files:
             frame = Image.open(frame_file)
-
-            frame_resized = frame.resize((new_width, new_height))
+            frame_resized = frame.resize((new_width, height))
             writer.append_data(np.array(frame_resized))
 
         writer.close()
