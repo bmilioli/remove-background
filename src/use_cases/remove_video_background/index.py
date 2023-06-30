@@ -3,7 +3,7 @@ import base64
 import os
 import requests
 from fastapi import HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 import tempfile
 from typing import List
 from PIL import Image
@@ -11,6 +11,8 @@ import glob
 import numpy as np
 import moviepy.editor as mpy
 import cv2
+import rembg
+from typing import List
 
 
 from config import settings
@@ -18,10 +20,19 @@ from config import settings
 
 class RemoveVideobackground:
 
-    def process_remove_video_background(self, video_file: UploadFile) -> FileResponse:
+    def process_remove_video_background_cpu(self, video_file: UploadFile) -> StreamingResponse:
+
         fps_video = self._extract_frames_from_video(video_file)
-        self._remove_background_from_video()
-        return self._create_video_from_frames(fps_video)
+        frame_files = self._remove_background_from_video_cpu()
+        self._add_background_to_video()
+        return self._create_video_from_frames(24)
+
+    def process_remove_video_background_gpu(self, video_file: UploadFile) -> StreamingResponse:
+
+        fps_video = self._extract_frames_from_video(video_file)
+        frame_files = self._remove_background_from_video_gpu()
+        self._add_background_to_video()
+        return self._create_video_from_frames(24)
 
     def _extract_frames_from_video(self, video: UploadFile) -> int:
         # Verificar se foi fornecido um arquivo de vídeo
@@ -71,7 +82,7 @@ class RemoveVideobackground:
 
         return fps
 
-    def _remove_background_from_video(self, model: str = 'u2net') -> List[str]:
+    def _remove_background_from_video_gpu(self, model: str = 'u2net') -> List[str]:
         input_folder = "temp/frames"
         output_folder = "temp/processed"
         url = "http://127.0.0.1:7860/rembg"
@@ -124,15 +135,75 @@ class RemoveVideobackground:
 
         return processed_images
 
-        # criar fundo preto no png e salvar em um novo diretorio
+    def _remove_background_from_video_cpu(self) -> List[str]:
+        processed_images = []
+        frameNumber = 0
+        input_folder = "temp/frames"
+        output_folder = "temp/processed"
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
 
-    def _create_video_from_frames(self, fps: int) -> FileResponse:
+        for filename in os.listdir(input_folder):
+            if filename.endswith(".png") or filename.endswith(".jpg"):
+                # Carrega a imagem
+                image_path = os.path.join(input_folder, filename)
+                with open(image_path, "rb") as image_file:
+                    image = image_file.read()
+
+                # Remove o fundo usando a biblioteca rembg
+                processed_image = rembg.remove(image)
+
+                # Salva a imagem processada em um arquivo png com o mesmo nome
+                processed_image_path = os.path.join(
+                    output_folder, f"frame_processed_{frameNumber:04d}.png")
+                with open(processed_image_path, 'wb') as f:
+                    f.write(processed_image)
+
+                processed_images.append(processed_image_path)
+                frameNumber += 1
+
+        return processed_images
+
+    # adicionar fundo preto aos frames
+    def _add_background_to_video(self) -> List[str]:
+        processed_images_with_black = []
+        frameNumber = 0
+        input_folder = "temp/processed"
+        output_folder = "temp/processed_with_background"
+
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
+        for filename in os.listdir(input_folder):
+            if filename.endswith(".png") or filename.endswith(".jpg"):
+                # Carrega a imagem
+                image_path = os.path.join(input_folder, filename)
+                with Image.open(image_path) as image:
+                    # Cria uma nova imagem com fundo preto
+                    processed_image_with_black = Image.new(
+                        "RGBA", image.size, (0, 0, 0))
+                    processed_image_with_black.paste(image, (0, 0), image)
+
+                    # Salva a imagem processada com fundo preto em um arquivo png com o mesmo nome
+                    processed_image_path = os.path.join(
+                        output_folder, f"frame_processed_{frameNumber:04d}.png")
+                    processed_image_with_black.save(processed_image_path)
+
+                    processed_images_with_black.append(processed_image_path)
+                    frameNumber += 1
+
+        return processed_images_with_black
+
+    def _create_video_from_frames(self, fps: int) -> StreamingResponse:
+        output_folder = 'temp/video'
+        input_folder = 'temp/processed_with_background'
 
         # Criar um diretório para armazenar o vídeo
-        os.makedirs('temp/video', exist_ok=True)
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
 
         # Abrir o diretório de frames
-        frames_path = os.path.join('temp/processed', '*.png')
+        frames_path = os.path.join(input_folder, '*.png')
         frame_files = sorted(glob.glob(frames_path))
 
         # Obter a largura e altura do primeiro frame
@@ -146,19 +217,35 @@ class RemoveVideobackground:
         new_width = int(height * aspect_ratio)
 
         # Criar um arquivo de vídeo
-        video_path = os.path.join('temp/video', 'video.mp4')
-        writer = imageio.get_writer(video_path, fps=fps)
+        video_path = os.path.join(output_folder, 'video.mp4')
+        writer = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(
+            *'mp4v'), fps, (new_width, height))
 
         # Adicionar os frames ao vídeo com redimensionamento
         for frame_file in frame_files:
             frame = Image.open(frame_file)
             frame_resized = frame.resize((new_width, height))
-            writer.append_data(np.array(frame_resized))
+            frame_resized_bgr = cv2.cvtColor(
+                np.array(frame_resized), cv2.COLOR_RGBA2BGR)
+            writer.write(frame_resized_bgr)
 
-        writer.close()
+        writer.release()
 
-        # Ler o arquivo de vídeo
+        # Ler o conteúdo do arquivo de vídeo
         with open(video_path, 'rb') as f:
             video_bytes = f.read()
 
-        return FileResponse(video_bytes, media_type='video/mp4', filename='video.mp4')
+            # Retornar um StreamingResponse com o objeto iterável
+        def stream():
+            with open(video_path, 'rb') as file:
+                while True:
+                    data = file.read(4096)
+                    if not data:
+                        break
+                    yield data
+
+        headers = {
+            'Content-Disposition': 'attachment; filename=video.mp4'
+        }
+
+        return StreamingResponse(stream(), media_type='video/mp4', headers=headers)
