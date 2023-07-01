@@ -1,5 +1,6 @@
 from fastapi import APIRouter, status, UploadFile
 from fastapi.responses import FileResponse
+import shutil
 
 from src.use_cases.remove_video_background.index import RemoveVideoBackground
 
@@ -13,6 +14,7 @@ background_remover = APIRouter()
 async def remove_video_background(file: UploadFile):
     execute = RemoveVideoBackground()
     file_output = execute.process_remove_video_background_cpu(file)
+    # shutil.rmtree("temp")
     return file_output
 
 
@@ -23,6 +25,7 @@ async def remove_video_background(file: UploadFile):
 async def remove_video_background_with_gpu(file: UploadFile):
     execute = RemoveVideoBackground()
     file_output = execute.process_remove_video_background_gpu(file)
+    # shutil.rmtree("temp")
     return file_output
 
 # @background_remover.post('/first_frame', status_code=status.HTTP_201_CREATED, description='Returns the first frame of the video')

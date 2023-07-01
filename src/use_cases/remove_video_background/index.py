@@ -14,7 +14,6 @@ import cv2
 import rembg
 from typing import List
 
-
 from config import settings
 
 
@@ -27,15 +26,21 @@ class RemoveVideoBackground:
 
     def process_remove_video_background_cpu(self, video_file: UploadFile) -> StreamingResponse:
         video_fps = self._extract_frames_from_video(video_file)
-        self._remove_background_from_video_cpu()
+        self._remove_background_from_frames_cpu()
         self._add_background_to_video()
 
-        output_video = self._create_video_from_frames(fps=video_fps)
+        video_name = video_file.filename
+        # video_name = video_name.replace(".", "") #TODO: CASOS EM QUE O ARQUIVO CONTÉM . NO NOME
+        file_name_without_format = video_name.split(".")[0]
+        file_format = video_name.split(".")[1]
+        file_name_output = f"{file_name_without_format}_processed.{file_format}"
+
+        output_video = self._create_video_from_frames(fps=video_fps, file_name=file_name_output)
         return output_video
 
     def process_remove_video_background_gpu(self, video_file: UploadFile) -> StreamingResponse:
         video_fps = self._extract_frames_from_video(video_file)
-        self._remove_background_from_video_gpu()
+        self._remove_background_from_frames_gpu()
         self._add_background_to_video()
 
         output_video = self._create_video_from_frames(fps=video_fps)
@@ -71,89 +76,85 @@ class RemoveVideoBackground:
             cv2.imwrite(frame_path, frame)
 
         video_capture.release()
+        os.remove(video_path)
 
         return fps
 
-    def _remove_background_from_video_gpu(self, model: str = 'u2net') -> List[str]:
+    def _remove_background_from_frames_gpu(self, model: str = 'u2net') -> List[str]:
         url = f"{settings.STABLE_DIFFUSION_BASE_URL}/rembg"
 
-        if not os.path.exists(self.processed_frames_folder):
-            os.makedirs(self.processed_frames_folder)
+        os.makedirs(self.processed_frames_folder, exist_ok=True)
 
-        for frame_index, filename  in enumerate(os.listdir(self.unprocessed_frames_folder), start=1):
-            if filename.endswith(".png") or filename.endswith(".jpg"):
-                image_path = os.path.join(self.unprocessed_frames_folder, filename)
-                with open(image_path, "rb") as image_file:
-                    image = image_file.read()
-                image_base64 = base64.b64encode(image).decode("utf-8")
-                data = {
-                    "input_image": image_base64,
-                    "model": "u2net",
-                    "return_mask": False,
-                    "alpha_matting": False,
-                    "alpha_matting_foreground_threshold": 240,
-                    "alpha_matting_background_threshold": 10,
-                    "alpha_matting_erode_size": 10
-                }
-                response = requests.post(url, json=data)
+        for filename in os.listdir(self.unprocessed_frames_folder):
+            image_path = os.path.join(self.unprocessed_frames_folder, filename)
+            with open(image_path, "rb") as image_file:
+                image = image_file.read()
+            image_base64 = base64.b64encode(image).decode("utf-8")
+            data = {
+                "input_image": image_base64,
+                "model": "u2net",
+                "return_mask": False,
+                "alpha_matting": False,
+                "alpha_matting_foreground_threshold": 240,
+                "alpha_matting_background_threshold": 10,
+                "alpha_matting_erode_size": 10
+            }
+            response = requests.post(url, json=data)
 
-                if response.status_code == 200:
-                    response_data = response.json()
-                    processed_image_bytes = base64.b64decode(response_data["image"])
+            if response.status_code == 200:
+                response_data = response.json()
+                processed_image_bytes = base64.b64decode(response_data["image"])
 
-                    processed_image_path = f'{self.processed_frames_folder}/frame_{frame_index:04d}.png'
-                    with open(processed_image_path, 'wb') as f:
-                        f.write(processed_image_bytes)
-
-                else:
-                    raise HTTPException(
-                        status_code=response.status_code, detail="Error processing the image")
-
-    def _remove_background_from_video_cpu(self) -> List[str]:
-        input_folder = self.unprocessed_frames_folder
-
-        if not os.path.exists(self.processed_frames_folder):
-            os.makedirs(self.processed_frames_folder)
-
-        for frame_index, filename in enumerate(os.listdir(input_folder)):
-            if filename.endswith(".png") or filename.endswith(".jpg"):
-                image_path = os.path.join(input_folder, filename)
-                with open(image_path, "rb") as image_file:
-                    image = image_file.read()
-
-                processed_image = rembg.remove(image)
-
-                unprocessed_file_index = filename.split('_')[-1].split(".")[0]
+                # processed_image_path = f'{self.processed_frames_folder}/frame_{frame_index:04d}.png'
+                unprocessed_file_index = self._extract_file_index(filename)
                 processed_image_path = os.path.join(self.processed_frames_folder, 
                                                     f"frame_processed_{unprocessed_file_index}.png")
-
                 with open(processed_image_path, 'wb') as f:
-                    f.write(processed_image)
+                    f.write(processed_image_bytes)
+
+            else:
+                raise HTTPException(
+                    status_code=response.status_code, detail="Error processing the image")
+
+    def _remove_background_from_frames_cpu(self) -> List[str]:
+        input_folder = self.unprocessed_frames_folder
+
+        os.makedirs(self.processed_frames_folder, exist_ok=True)
+
+        for filename in os.listdir(input_folder):
+            image_path = os.path.join(input_folder, filename)
+
+            with open(image_path, "rb") as image_file:
+                image = image_file.read()
+
+            processed_image = rembg.remove(image)
+
+            unprocessed_file_index = self._extract_file_index(filename)
+            processed_image_path = os.path.join(self.processed_frames_folder, 
+                                                f"frame_processed_{unprocessed_file_index}.png")
+
+            with open(processed_image_path, 'wb') as f:
+                f.write(processed_image)
 
     def _add_background_to_video(self) -> List[str]:
 
-        if not os.path.exists(self.processed_frames_with_background_folder):
-            os.makedirs(self.processed_frames_with_background_folder)
+        os.makedirs(self.processed_frames_with_background_folder, exist_ok=True)
 
-        for frame_index, filename in enumerate(os.listdir(self.processed_frames_folder)):
-            if filename.endswith(".png") or filename.endswith(".jpg"):
-                image_path = os.path.join(self.processed_frames_folder, filename)
-                with Image.open(image_path) as image:
-                    processed_image_with_black = Image.new("RGBA", image.size, (0, 0, 0))
-                    processed_image_with_black.paste(image, (0, 0), image)
+        for filename in os.listdir(self.processed_frames_folder):
+            image_path = os.path.join(self.processed_frames_folder, filename)
+            with Image.open(image_path) as image:
+                processed_image_with_black = Image.new("RGBA", image.size, (0, 0, 0))
+                processed_image_with_black.paste(image, (0, 0), image)
 
-                    unprocessed_file_index = filename.split('_')[-1].split(".")[0]
-                    processed_image_path = os.path.join(self.processed_frames_with_background_folder, 
-                                                        f"frame_processed_{unprocessed_file_index}.png")
+                unprocessed_file_index = self._extract_file_index(filename)
+                processed_image_path = os.path.join(self.processed_frames_with_background_folder, 
+                                                    f"frame_processed_{unprocessed_file_index}.png")
 
-                    # processed_image_path = os.path.join(
-                    #     self.processed_frames_with_background_folder, f"frame_processed_{frame_index:04d}.png")
-                    processed_image_with_black.save(processed_image_path)
+                processed_image_with_black.save(processed_image_path)
 
+    def _create_video_from_frames(self, file_name: str, fps: int) -> StreamingResponse:
 
-    def _create_video_from_frames(self, fps: int) -> StreamingResponse:
-        if not os.path.exists(self.video_folder):
-            os.makedirs(self.video_folder)
+        os.makedirs(self.video_folder, exist_ok=True)
 
         frames_path = os.path.join(self.processed_frames_with_background_folder, '*.png')
         frame_files = sorted(glob.glob(frames_path))
@@ -166,8 +167,7 @@ class RemoveVideoBackground:
         new_width = int(height * aspect_ratio)
 
         video_path = os.path.join(self.video_folder, 'video.mp4')
-        writer = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(
-            *'mp4v'), fps, (new_width, height))
+        writer = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (new_width, height))
 
         for frame_file in frame_files:
             frame = Image.open(frame_file)
@@ -187,7 +187,11 @@ class RemoveVideoBackground:
                     yield data
 
         headers = {
-            'Content-Disposition': 'attachment; filename=video.mp4'
+            'Content-Disposition': f'attachment; filename={file_name}'
         }
 
         return StreamingResponse(stream(), media_type='video/mp4', headers=headers)
+
+    def _extract_file_index(self, filename):
+        file_index = filename.split('_')[-1].split(".")[0]
+        return file_index
