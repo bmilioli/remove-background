@@ -1,23 +1,36 @@
-# Usa uma imagem base com o Python instalado
-FROM python:3.10-slim
+FROM ubuntu:22.04
 
-# Define o diretório de trabalho
+RUN ln -fs /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
+RUN apt update \
+ && apt upgrade -y \
+ && apt-get install -y wget \
+ && apt install curl -y
+
 WORKDIR /app
 
-# Copia o arquivo requirements.txt para o diretório de trabalho
-COPY requirements.txt .
+RUN apt install -y -q build-essential python3-pip python3-dev
 
-# Copia o arquivo .env para o diretório de trabalho
-COPY .env .
+RUN pip3 install -U pip setuptools wheel
 
-# Instala as dependências
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install gunicorn uvloop httptools
 
-# Copia todo o código do aplicativo para o diretório de trabalho
-COPY . .
+COPY requirements.txt /app/requirements.txt
 
-# Define a porta que o aplicativo será exposto
-EXPOSE 8000
+RUN pip3 install -r /app/requirements.txt
+		
 
-# Comando para executar o aplicativo
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+COPY ./ /app
+ENV YDEVD_DISABLE_FILE_VALIDATION=1
+ENV PYARROW_IGNORE_TIMEZONE=1
+
+EXPOSE 80
+EXPOSE 4041
+
+CMD gunicorn main:app \
+    -w 4 \
+    --timeout 0 \
+    -b 0.0.0.0:80 \
+    --graceful-timeout 0 \
+    -k uvicorn.workers.UvicornWorker
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
