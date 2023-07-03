@@ -10,10 +10,11 @@ import numpy as np
 import moviepy.editor as mpy
 import cv2
 import rembg
-import hashlib
+# import hashlib
 import secrets
 import shutil
 import platform
+import uuid
 from datetime import datetime, timedelta
 
 from typing import List
@@ -23,16 +24,12 @@ from config import settings
 
 class RemoveVideoBackground:
     def __init__(self) -> None:
-        # Gera 16 bytes de dados aleatórios
-        random_data = secrets.token_hex(16)
-        hash_object = hashlib.md5(random_data.encode())
-        hash_value = hash_object.hexdigest()
-        self.unprocessed_frames_folder = f"temp/{hash_value}/frames"
-        self.processed_frames_folder = f"temp/{hash_value}/processed"
-        self.processed_frames_with_background_folder = f"temp/{hash_value}/processed_with_background"
-        self.video_folder = f"temp/{hash_value}/video"
+        execution_id = uuid.uuid4()
+        self.unprocessed_frames_folder = f"temp/{execution_id}/frames"
+        self.processed_frames_folder = f"temp/{execution_id}/processed"
+        self.processed_frames_with_background_folder = f"temp/{execution_id}/processed_with_background"
+        self.video_folder = f"temp/{execution_id}/video"
         current_platform = platform.system()
-        # Apagar as pastas que foram criadas a mais de 10 minutos
 
         self._delete_old_folders(current_platform)
 
@@ -70,11 +67,8 @@ class RemoveVideoBackground:
 
     def _delete_old_folders(self, current_platform):
         folder_to_check = "temp/"
-
         folders_to_check = glob.glob(os.path.join(folder_to_check, "*"))
-
         current_time = datetime.now()
-
         time_difference = timedelta(minutes=10)
 
         for folder in folders_to_check:
