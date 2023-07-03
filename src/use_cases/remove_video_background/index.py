@@ -69,38 +69,29 @@ class RemoveVideoBackground:
         return output_video
 
     def _delete_old_folders(self, current_platform):
-        # Define as pastas que serão verificadas
         folder_to_check = "temp/"
 
-        # Obtém a lista de caminhos de pastas dentro de "temp"
         folders_to_check = glob.glob(os.path.join(folder_to_check, "*"))
 
         current_time = datetime.now()
 
-        # Define a diferença de tempo de 10 minutos
         time_difference = timedelta(minutes=10)
 
         for folder in folders_to_check:
 
-            # Verifica se a pasta existe
             if os.path.exists(folder):
-                # Obtém a data de criação da pasta
                 creation_time = datetime.fromtimestamp(
                     os.path.getctime(folder))
 
-                # Calcula a diferença de tempo entre a data de criação e o tempo atual
                 time_elapsed = current_time - creation_time
 
                 if time_elapsed > time_difference:
-                    # Verifica a plataforma atual e usa a lógica adequada
                     if current_platform == 'Windows':
                         try:
-                            # Remove a pasta e todo o seu conteúdo no Windows
                             os.system(f'rmdir /s /q "{folder}"')
                         except Exception as e:
                             print(f"Erro ao excluir a pasta {folder}: {e}")
                     else:
-                        # Remove a pasta e todo o seu conteúdo em sistemas Unix/Linux
                         os.system(f"rm -rf {folder}")
 
     def _extract_frames_from_video(self, video: UploadFile) -> int:
@@ -255,7 +246,6 @@ class RemoveVideoBackground:
         }
 
         if current_platform == 'Windows':
-            # apagar as pastas usadas
             shutil.rmtree(self.unprocessed_frames_folder)
             shutil.rmtree(self.processed_frames_folder)
         else:
