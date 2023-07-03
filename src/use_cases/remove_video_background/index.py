@@ -25,6 +25,7 @@ from config import settings
 class RemoveVideoBackground:
     def __init__(self) -> None:
         execution_id = uuid.uuid4()
+
         self.unprocessed_frames_folder = f"temp/{execution_id}/frames"
         self.processed_frames_folder = f"temp/{execution_id}/processed"
         self.processed_frames_with_background_folder = f"temp/{execution_id}/processed_with_background"
