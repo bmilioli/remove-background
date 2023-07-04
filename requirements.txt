@@ -1,4 +1,3 @@
-#TODO - CHECK IF IT IS WORKING WITH THE GPU ENDPOINT TOO
 anyio==3.7.0
 certifi==2023.5.7
 charset-normalizer==3.1.0
@@ -14,7 +13,7 @@ idna==3.4
 imageio==2.31.1
 imageio-ffmpeg==0.4.8
 importlib-metadata==6.7.0
-lazy-loader==0.3
+lazy_loader==0.3
 llvmlite==0.40.1
 moviepy==1.0.3
 mpmath==1.3.0
@@ -44,7 +43,7 @@ starlette==0.27.0
 sympy==1.12
 tifffile==2023.4.12
 tqdm==4.65.0
-typing-extensions==4.7.1
+typing_extensions==4.7.1
 urllib3==2.0.3
 uvicorn==0.22.0
 zipp==3.15.0
