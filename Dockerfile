@@ -14,6 +14,8 @@ RUN pip3 install gunicorn uvloop httptools
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
+
 COPY requirements.txt /app/requirements.txt
 
 RUN pip3 install -r /app/requirements.txt
