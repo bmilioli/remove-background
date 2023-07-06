@@ -4,7 +4,7 @@ Para instalar o aplicativo em Python, siga as etapas abaixo:
 
 1. Clone o repositório:
    
-   `git clone `[`https://github.com/seu-usuario/nome-do-repositorio.git`](https://github.com/seu-usuario/nome-do-repositorio.git)
+   `git clone https://github.com/seu-usuario/nome-do-repositorio.git`
    
 2. Navegue até o diretório do projeto:
    
@@ -39,7 +39,7 @@ Você também pode executar o aplicativo usando o Docker. Certifique-se de ter o
 
 1. Clone o repositório:
    
-   `git clone `[`https://github.com/seu-usuario/nome-do-repositorio.git`](https://github.com/seu-usuario/nome-do-repositorio.git)
+   `git clone https://github.com/seu-usuario/nome-do-repositorio.git`
    
 2. Navegue até o diretório do projeto:
    
